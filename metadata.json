@@ -1,0 +1,7 @@
+{
+  "name": "Workspace Finder",
+  "description": "Find, rate, and save work-friendly locations using Google Maps.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
