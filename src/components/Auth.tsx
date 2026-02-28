@@ -73,7 +73,7 @@ export default function Auth({ onClose }: AuthProps) {
           <p style={{ fontSize: '11px', color: '#666', marginBottom: '4px' }}>Username is required for new accounts</p>
           <input
             type="text"
-            placeholder="Username"
+            placeholder="Choose a username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
