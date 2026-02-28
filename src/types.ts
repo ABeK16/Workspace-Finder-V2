@@ -7,6 +7,7 @@ export interface Place {
     lng: number;
   };
   rating?: number;
+  distance?: number;
   user_ratings_total?: number;
   photos?: string[];
   types?: string[];

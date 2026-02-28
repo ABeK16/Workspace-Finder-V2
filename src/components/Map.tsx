@@ -4,13 +4,14 @@ import { Place, SavedPlace } from "../types";
 interface MapProps {
   places: Place[];
   savedPlaces: SavedPlace[];
+  recommendations?: Place[];
   selectedPlaceId: string | null;
   onPlaceSelect: (placeId: string) => void;
   isLoaded: boolean;
   onError?: (error: Error) => void;
 }
 
-export function Map({ places, savedPlaces, selectedPlaceId, onPlaceSelect, isLoaded, onError }: MapProps) {
+export function Map({ places, savedPlaces, recommendations = [], selectedPlaceId, onPlaceSelect, isLoaded, onError }: MapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<google.maps.Marker[]>([]);
@@ -90,7 +91,7 @@ export function Map({ places, savedPlaces, selectedPlaceId, onPlaceSelect, isLoa
             position: place.location,
             map: mapInstanceRef.current,
             title: place.name,
-            icon: selectedPlaceId === place.id ? "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png" : "http://maps.google.com/mapfiles/ms/icons/red-dot.png",
+            icon: selectedPlaceId === place.id ? "http://maps.google.com/mapfiles/ms/icons/blue-dot.png" : "http://maps.google.com/mapfiles/ms/icons/red-dot.png",
           });
 
           marker.addListener("click", () => {
@@ -122,32 +123,56 @@ export function Map({ places, savedPlaces, selectedPlaceId, onPlaceSelect, isLoa
             hasMarkers = true;
           }
         });
+
+        // Add markers for recommendations
+        recommendations.forEach((place) => {
+          // Don't duplicate if already in search results or saved
+          if (places.some(p => p.id === place.id) || savedPlaces.some(p => p.google_place_id === place.id)) {
+            return;
+          }
+
+          const marker = new Marker({
+            position: place.location,
+            map: mapInstanceRef.current,
+            title: place.name,
+            icon: selectedPlaceId === place.id ? "http://maps.google.com/mapfiles/ms/icons/blue-dot.png" : "http://maps.google.com/mapfiles/ms/icons/purple-dot.png",
+            zIndex: 50,
+          });
+
+          marker.addListener("click", () => {
+            onPlaceSelect(place.id);
+          });
+
+          markersRef.current.push(marker);
+          bounds.extend(place.location);
+          hasMarkers = true;
+        });
         
         if (hasMarkers && !selectedPlaceId) {
           mapInstanceRef.current?.fitBounds(bounds);
         }
       } catch (err) {
         console.error("Failed to update markers:", err);
-        // We might not want to show a full error screen for marker updates, 
-        // but for now let's log it.
       }
     };
 
     updateMarkers();
 
-  }, [places, savedPlaces, selectedPlaceId, onPlaceSelect]);
+  }, [places, savedPlaces, recommendations, selectedPlaceId, onPlaceSelect]);
 
   // Pan to selected place
   useEffect(() => {
     if (!mapInstanceRef.current || !selectedPlaceId) return;
     
-    const place = places.find(p => p.id === selectedPlaceId) || savedPlaces.find(p => p.google_place_id === selectedPlaceId)?.details;
+    const place = places.find(p => p.id === selectedPlaceId) || 
+                  savedPlaces.find(p => p.google_place_id === selectedPlaceId)?.details ||
+                  recommendations.find(p => p.id === selectedPlaceId);
     
     if (place) {
       mapInstanceRef.current.panTo(place.location);
       mapInstanceRef.current.setZoom(15);
     }
-  }, [selectedPlaceId, places, savedPlaces]);
+  }, [selectedPlaceId, places, savedPlaces, recommendations]);
 
   return <div ref={mapRef} className="w-full h-full min-h-[400px] rounded-xl overflow-hidden shadow-sm border border-gray-200" />;
 }

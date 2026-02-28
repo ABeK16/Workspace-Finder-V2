@@ -27,7 +27,7 @@ db.exec(`
     wifi_speed_mbps TEXT,
     has_outlets BOOLEAN DEFAULT 0,
     outlet_rating INTEGER DEFAULT 0,
-    noise_level TEXT,
+    noise_level INTEGER DEFAULT 0,
     notes TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
@@ -40,6 +40,28 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 `);
+
+// Migration: Ensure columns added in later versions exist
+const tableInfo = db.prepare("PRAGMA table_info(saved_places)").all() as any[];
+const columns = tableInfo.map(c => c.name);
+
+if (!columns.includes('wifi_speed_mbps')) {
+  try {
+    db.exec("ALTER TABLE saved_places ADD COLUMN wifi_speed_mbps TEXT;");
+    console.log("Added wifi_speed_mbps column to saved_places");
+  } catch (e) {
+    console.error("Failed to add wifi_speed_mbps column:", e);
+  }
+}
+
+if (!columns.includes('noise_level')) {
+  try {
+    db.exec("ALTER TABLE saved_places ADD COLUMN noise_level INTEGER DEFAULT 0;");
+    console.log("Added noise_level column to saved_places");
+  } catch (e) {
+    console.error("Failed to add noise_level column:", e);
+  }
+}
 
 async function startServer() {
   const app = express();

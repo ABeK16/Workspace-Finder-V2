@@ -8,9 +8,10 @@ interface SidebarProps {
   recommendations: Place[];
   onSelectPlace: (placeId: string) => void;
   isSearching: boolean;
+  username?: string;
 }
 
-export function Sidebar({ onSearch, savedPlaces, recommendations, onSelectPlace, isSearching }: SidebarProps) {
+export function Sidebar({ onSearch, savedPlaces, recommendations, onSelectPlace, isSearching, username }: SidebarProps) {
   const [query, setQuery] = useState("");
   const [type, setType] = useState("cafe");
   const [activeTab, setActiveTab] = useState<"search" | "favorites" | "reviews">("search");
@@ -34,7 +35,7 @@ export function Sidebar({ onSearch, savedPlaces, recommendations, onSelectPlace,
       <div className="p-4 border-b border-gray-200 bg-gray-50">
         <h1 className="text-lg font-bold text-gray-900 flex items-center gap-2 mb-4">
           <MapPin className="w-5 h-5 text-blue-600" />
-          WorkSpace Finder
+          {username ? `WorkSpace Finder for ${username}` : "WorkSpace Finder"}
         </h1>
         
         <div className="flex bg-gray-200 p-1 rounded-lg mb-4">
@@ -115,7 +116,10 @@ export function Sidebar({ onSearch, savedPlaces, recommendations, onSelectPlace,
             savedPlaces.map((place) => (
               <div
                 key={place.id}
-                onClick={() => onSelectPlace(place.google_place_id)}
+                onClick={() => {
+                  if (place.details?.name) setQuery(place.details.name);
+                  onSelectPlace(place.google_place_id);
+                }}
                 className="p-3 bg-white border border-gray-100 rounded-lg hover:border-blue-300 hover:shadow-sm cursor-pointer transition-all group"
               >
                 <div className="flex justify-between items-start mb-1">
@@ -207,14 +211,17 @@ export function Sidebar({ onSearch, savedPlaces, recommendations, onSelectPlace,
           </div>
         ) : (
           <>
-            {recommendations.length > 0 && (
+            {recommendations.length > 0 ? (
               <div className="mb-4">
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 px-2">Top Recommendations</h3>
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 px-2">Top Recommendations (within 10km)</h3>
                 <div className="space-y-2">
                   {recommendations.map((place) => (
                     <div
                       key={place.id}
-                      onClick={() => onSelectPlace(place.id)}
+                      onClick={() => {
+                        setQuery(place.name);
+                        onSelectPlace(place.id);
+                      }}
                       className="p-3 bg-blue-50 border border-blue-100 rounded-lg hover:border-blue-300 hover:shadow-sm cursor-pointer transition-all group"
                     >
                       <div className="flex justify-between items-start mb-1">
@@ -226,7 +233,14 @@ export function Sidebar({ onSearch, savedPlaces, recommendations, onSelectPlace,
                           {place.rating || "-"}
                         </div>
                       </div>
-                      <p className="text-xs text-gray-500 truncate mb-1">{place.address}</p>
+                      <div className="flex justify-between items-center mb-1">
+                        <p className="text-xs text-gray-500 truncate flex-1">{place.address}</p>
+                        {place.distance !== undefined && (
+                          <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 px-1 rounded ml-2 whitespace-nowrap">
+                            {place.distance.toFixed(1)} km
+                          </span>
+                        )}
+                      </div>
                       {place.opening_hours && (
                         <div className="text-xs">
                           <span className={place.opening_hours.open_now ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
@@ -237,6 +251,11 @@ export function Sidebar({ onSearch, savedPlaces, recommendations, onSelectPlace,
                     </div>
                   ))}
                 </div>
+              </div>
+            ) : (
+              <div className="mb-4 px-2">
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Top Recommendations</h3>
+                <p className="text-xs text-gray-400 italic">No highly-rated laptop-friendly spots found within 10km of your location.</p>
               </div>
             )}
             

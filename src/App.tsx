@@ -14,6 +14,19 @@ import { supabase } from "./lib/supabaseClient";
 import { Place, SavedPlace } from "./types";
 import { Loader2, User } from "lucide-react";
 
+// Helper to calculate distance in km
+const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+  const R = 6371; // Radius of the earth in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
+
 export default function App() {
   const { isLoaded, error, setError } = useGoogleMaps();
   const [places, setPlaces] = useState<Place[]>([]);
@@ -73,17 +86,36 @@ export default function App() {
               const { Place } = await google.maps.importLibrary("places") as google.maps.PlacesLibrary;
               const request = {
                 textQuery: "best laptop friendly cafe",
-                locationBias: { center: location, radius: 2000 },
+                locationBias: { center: location, radius: 10000 },
                 fields: ["id", "displayName", "formattedAddress", "location", "photos", "rating", "userRatingCount", "regularOpeningHours"],
               };
               
               const { places: results } = await Place.searchByText(request);
               
-              // Filter for high rating and map
-              const topPlaces = await Promise.all(results
-                .filter(p => (p.rating || 0) >= 4.0)
-                .slice(0, 3)
-                .map(async (p) => {
+              // Map and calculate distance first
+              const placesWithDistance = results.map(p => {
+                const lat = p.location?.lat() || 0;
+                const lng = p.location?.lng() || 0;
+                const distance = calculateDistance(location.lat, location.lng, lat, lng);
+                return { p, distance };
+              });
+
+              // Filter for high rating AND strict 10km radius
+              // Then sort by distance (primary) and rating (secondary)
+              const filteredResults = placesWithDistance
+                .filter(({ p, distance }) => (p.rating || 0) >= 4.0 && distance <= 10)
+                .sort((a, b) => {
+                  // Prioritize distance
+                  if (Math.abs(a.distance - b.distance) > 1) { // If distance difference > 1km
+                    return a.distance - b.distance;
+                  }
+                  // Otherwise sort by rating
+                  return (b.p.rating || 0) - (a.p.rating || 0);
+                })
+                .slice(0, 3);
+
+              const topPlaces = await Promise.all(filteredResults
+                .map(async ({ p, distance }) => {
                   let isOpen = undefined;
                   try {
                     isOpen = await p.isOpen();
@@ -100,6 +132,7 @@ export default function App() {
                       lng: p.location?.lng() || 0,
                     },
                     rating: p.rating as number,
+                    distance: distance,
                     user_ratings_total: p.userRatingCount as number,
                     photos: p.photos?.map(photo => photo.getURI()) || [],
                     opening_hours: {
@@ -201,7 +234,7 @@ export default function App() {
 
       const request = {
         textQuery: `${query} ${type}`,
-        locationBias: { center, radius: 5000 }, // 5km radius
+        locationBias: { center, radius: 10000 }, // 10km radius
         fields: ["id", "displayName", "formattedAddress", "location", "photos", "regularOpeningHours", "rating", "userRatingCount"],
       };
 
@@ -215,15 +248,20 @@ export default function App() {
           console.warn(`Failed to get isOpen for ${p.id}`, e);
         }
 
+        const lat = p.location?.lat() || 0;
+        const lng = p.location?.lng() || 0;
+        const distance = calculateDistance(center.lat, center.lng, lat, lng);
+
         return {
           id: p.id as string,
           name: p.displayName as string,
           address: p.formattedAddress as string,
           location: {
-            lat: p.location?.lat() || 0,
-            lng: p.location?.lng() || 0,
+            lat,
+            lng,
           },
           rating: p.rating as number,
+          distance: distance,
           user_ratings_total: p.userRatingCount as number,
           photos: p.photos?.map(photo => photo.getURI()) || [],
           opening_hours: {
@@ -232,6 +270,9 @@ export default function App() {
           }
         };
       }));
+
+      // Sort search results by distance
+      mappedPlaces.sort((a, b) => (a.distance || 0) - (b.distance || 0));
 
       setPlaces(mappedPlaces);
       
@@ -248,7 +289,16 @@ export default function App() {
     setSelectedPlaceId(placeId);
   };
 
-  const handleSavePlace = async (placeId: string, data: Partial<SavedPlace>) => {
+const handleSavePlace = async (placeId: string, data: Partial<SavedPlace>) => {
+    // 1. Check if this is an update to an already saved place
+    const isExistingPlace = savedPlaces.some(p => p.google_place_id === placeId);
+    
+    // 2. The Guard Clause: If it's a NEW place and they already have 3, block it.
+    if (!isExistingPlace && savedPlaces.length >= 3) {
+      alert("Free Tier Limit: To protect API usage during development, you can only save up to 3 places. Please delete a saved place before adding a new one.");
+      return; // Exit the function immediately so it doesn't hit Supabase or Google
+    }
+
     try {
       const saved = await savePlace({ ...data, google_place_id: placeId });
       
@@ -261,13 +311,10 @@ export default function App() {
           return updated;
         } else {
           // We need to add the details immediately for UI responsiveness
-          const placeDetails = places.find(p => p.id === placeId);
+          const placeDetails = places.find(p => p.id === placeId) || recommendations.find(p => p.id === placeId);
           return [...prev, { ...saved, details: placeDetails }];
         }
       });
-      
-      // Refresh to ensure sync
-      // fetchSavedPlaces(); 
     } catch (err) {
       console.error("Failed to save place", err);
       alert("Failed to save place.");
@@ -330,6 +377,7 @@ export default function App() {
         recommendations={recommendations}
         onSelectPlace={handleSelectPlace}
         isSearching={isSearching}
+        username={session?.user?.user_metadata?.username}
       />
       
       <div className="flex-1 relative">
@@ -342,15 +390,15 @@ export default function App() {
         </button>
 
         {showAuth && (
-          <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            <div className="relative">
-              <button 
-                onClick={() => setShowAuth(false)}
-                className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 z-40"
-              >
-                ✕
-              </button>
-              <Auth />
+          <div 
+            className="absolute inset-0 z-30 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowAuth(false)}
+          >
+            <div 
+              className="relative"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Auth onClose={() => setShowAuth(false)} />
             </div>
           </div>
         )}
@@ -366,6 +414,7 @@ export default function App() {
           <Map 
             places={places}
             savedPlaces={savedPlaces}
+            recommendations={recommendations}
             selectedPlaceId={selectedPlaceId}
             onPlaceSelect={handleSelectPlace}
             isLoaded={isLoaded}

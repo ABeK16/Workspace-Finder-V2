@@ -38,7 +38,7 @@ export function PlaceDetails({ place, savedPlace, onSave, onDelete, onClose }: P
       work_rating: workRating,
       wifi_speed_rating: wifiRating,
       wifi_speed_mbps: wifiMbps,
-      has_outlets: hasOutlets,
+      has_outlets: outletRating > 0,
       outlet_rating: outletRating,
       noise_level: noiseLevel,
       notes: notes,
@@ -209,7 +209,6 @@ export function PlaceDetails({ place, savedPlace, onSave, onDelete, onClose }: P
                         />
                       ))}
                     </div>
-                    <Plug className={`w-4 h-4 ${savedPlace.has_outlets ? "text-green-500" : "text-gray-300"}`} />
                   </div>
                 </div>
 
@@ -314,13 +313,6 @@ export function PlaceDetails({ place, savedPlace, onSave, onDelete, onClose }: P
                         </button>
                       ))}
                     </div>
-                    <button 
-                      onClick={() => setHasOutlets(!hasOutlets)}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-colors ${hasOutlets ? "bg-green-50 border-green-200 text-green-700" : "bg-gray-50 border-gray-200 text-gray-600"}`}
-                    >
-                      <Plug className="w-4 h-4" />
-                      <span className="text-xs font-medium">Available</span>
-                    </button>
                   </div>
                 </div>
 
